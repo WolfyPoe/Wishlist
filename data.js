@@ -15,10 +15,10 @@ window.WISHLIST = {
   people: {
     trevor: {
       name: "Trevor",
-      birthday: "",            // e.g. "04-17"
-      photo: "",               // e.g. "images/trevor.jpg"
-      giftLine: "Gift cards are always a win too: [STORE].",
-      sizesLine: "Sizes: shirt [SIZE] · hoodie [SIZE] · boots [SIZE]",
+      birthday: "12-08",            // e.g. "12-08"
+      photo: "trev.png",               // e.g. "images/trevor.jpg"
+      giftLine: "Gift cards are always a win too: Steam || Amazon || MicroCenter.",
+      sizesLine: "Sizes: shirt Medium/Large · hoodie Large · boots 12",
       items: [
         { id: "t1", category: "Fishing",     name: "[Item name]", note: "[Rod, reel, lure, or gear details]",          price: "[$ price]", occ: "christmas", top: true,  link: "#" },
         { id: "t2", category: "3D Printing", name: "[Item name]", note: "[Filament type and color, part, or upgrade]", price: "[$ price]", occ: "birthday",  top: true,  link: "#" },
@@ -31,9 +31,9 @@ window.WISHLIST = {
 
     maya: {
       name: "Maya",
-      birthday: "",
-      photo: "",
-      giftLine: "Gift cards are always a win too: [STORE].",
+      birthday: "09-03",
+      photo: "may.png",
+      giftLine: "Gift cards are always a win too: Amazon.",
       sizesLine: "Sizes: shirt [SIZE] · hoodie [SIZE] · ring [SIZE]",
       items: [
         { id: "m1", category: "Crystals & Gems", name: "[Item name]", note: "[Stone, shape, or size]",                      price: "[$ price]", occ: "christmas", top: true,  link: "#" },
