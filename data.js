@@ -53,6 +53,6 @@ window.WISHLIST = {
 //  Left blank, the site shows the demo items above.
 // ------------------------------------------------------------
 window.WISHLIST_SUPABASE = {
-  url: "",      // e.g. "https://abcd1234.supabase.co"
-  anonKey: ""   // the "anon public" key
+  url: "https://wzsspqnownquftwpcaew.supabase.co",      // e.g. "https://abcd1234.supabase.co"
+  anonKey: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Ind6c3NwcW5vd25xdWZ0d3BjYWV3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTQyMDYxMDQsImV4cCI6MjEwOTc4MjEwNH0.ioO__D5OOlIN48GnlHunB58fegxmGyRi_xx3C9q7ASo"   // the "anon public" key
 };
