@@ -16,7 +16,7 @@ window.WISHLIST = {
     trevor: {
       name: "Trevor",
       birthday: "12-08",            // e.g. "12-08"
-      photo: "trev.png",               // e.g. "images/trevor.jpg"
+      photo: "Trev.png",               // e.g. "images/trevor.jpg"
       giftLine: "Gift cards are always a win too: Steam || Amazon || MicroCenter.",
       sizesLine: "Sizes: shirt Medium/Large · hoodie Large · boots 12",
       items: [
@@ -32,7 +32,7 @@ window.WISHLIST = {
     maya: {
       name: "Maya",
       birthday: "09-03",
-      photo: "may.png",
+      photo: "May.png",
       giftLine: "Gift cards are always a win too: Amazon.",
       sizesLine: "Sizes: shirt [SIZE] · hoodie [SIZE] · ring [SIZE]",
       items: [
