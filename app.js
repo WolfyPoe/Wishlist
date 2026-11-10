@@ -4,7 +4,8 @@
   var DATA = window.WISHLIST;
   var CFG = window.WISHLIST_SUPABASE || {};
   var sb = (CFG.url && CFG.anonKey && window.supabase) ? window.supabase.createClient(CFG.url, CFG.anonKey) : null;
-  var LS_KEY = "wishlist-claims-v1";
+  var LS_DEMO = "wishlist-demo-claims-v2"; // demo mode only: claim counts
+  var LS_MINE = "wishlist-mine-v2";        // claim ids made in this browser, so you can undo yours
 
   var THEME_TEXT = {
     trevor: { eyebrow: '> wishlist.load("trevor") — birthday + christmas ' + DATA.year, bday: "birthday.exe", xmas: "christmas.exe" },
@@ -16,7 +17,8 @@
     person: pickPersonFromHash(),
     filter: "all",
     items: {},          // person -> [items]
-    claims: {},         // item id -> true
+    claims: {},         // item id -> how many people claimed it
+    mine: loadMine(),   // item id -> [claim ids made in this browser]
     loaded: false,
     session: null,
     editorPerson: null, // which list the signed-in user may edit
@@ -65,10 +67,18 @@
   }
   function canEdit() { return !!state.editorPerson && state.editorPerson === state.person; }
 
+  function loadMine() {
+    try { return JSON.parse(localStorage.getItem(LS_MINE) || "{}") || {}; } catch (e) { return {}; }
+  }
+  function saveMine() {
+    try { localStorage.setItem(LS_MINE, JSON.stringify(state.mine)); } catch (e) {}
+  }
+  function qtyOf(it) { var q = parseInt(it.qty, 10); return q > 0 ? q : 1; }
+
   // ---------- data ----------
   function loadDemo() {
     Object.keys(DATA.people).forEach(function (k) { state.items[k] = (DATA.people[k].items || []).slice(); });
-    try { state.claims = JSON.parse(localStorage.getItem(LS_KEY) || "{}"); } catch (e) { state.claims = {}; }
+    try { state.claims = JSON.parse(localStorage.getItem(LS_DEMO) || "{}") || {}; } catch (e) { state.claims = {}; }
     state.loaded = true;
     render();
   }
@@ -77,16 +87,25 @@
     if (!sb) { loadDemo(); return; }
     Promise.all([
       sb.from("items").select("*").order("created_at", { ascending: false }),
-      sb.from("claims").select("item_id")
+      sb.from("claims").select("id,item_id")
     ]).then(function (res) {
       if (res[0].error) throw res[0].error;
       var byPerson = {};
       Object.keys(DATA.people).forEach(function (k) { byPerson[k] = []; });
       (res[0].data || []).forEach(function (it) { if (byPerson[it.person]) byPerson[it.person].push(it); });
       state.items = byPerson;
-      var c = {};
-      ((res[1] && res[1].data) || []).forEach(function (r) { c[r.item_id] = true; });
-      state.claims = c;
+      var counts = {}, live = {};
+      ((res[1] && res[1].data) || []).forEach(function (r) {
+        counts[r.item_id] = (counts[r.item_id] || 0) + 1;
+        live[r.id] = true;
+      });
+      state.claims = counts;
+      // forget any of "my" claims that no longer exist (item deleted, etc.)
+      Object.keys(state.mine).forEach(function (itemId) {
+        state.mine[itemId] = (state.mine[itemId] || []).filter(function (cid) { return live[cid]; });
+        if (!state.mine[itemId].length) delete state.mine[itemId];
+      });
+      saveMine();
       state.loaded = true;
       render();
     }).catch(function (err) {
@@ -97,18 +116,49 @@
     });
   }
 
-  function setClaim(id, on) {
-    if (on) state.claims[id] = true; else delete state.claims[id];
+  function bump(id, by) {
+    state.claims[id] = Math.max(0, (state.claims[id] || 0) + by);
+    if (!state.claims[id]) delete state.claims[id];
+  }
+  function saveFailed() {
     render();
-    if (!sb) { try { localStorage.setItem(LS_KEY, JSON.stringify(state.claims)); } catch (e) {} return; }
-    var q = on
-      ? sb.from("claims").upsert({ item_id: id })
-      : sb.from("claims").delete().eq("item_id", id);
-    q.then(function (r) {
+    $("summary").textContent = "Couldn't save that. Check your connection and try again.";
+  }
+
+  function claimOne(it) {
+    var id = it.id;
+    if ((state.claims[id] || 0) >= qtyOf(it)) return;
+    bump(id, 1);
+    if (!sb) {
+      (state.mine[id] = state.mine[id] || []).push("local-" + Date.now());
+      saveMine();
+      try { localStorage.setItem(LS_DEMO, JSON.stringify(state.claims)); } catch (e) {}
+      render();
+      return;
+    }
+    render();
+    sb.from("claims").insert({ item_id: id }).select("id").single().then(function (r) {
+      if (r.error || !r.data) { bump(id, -1); saveFailed(); return; }
+      (state.mine[id] = state.mine[id] || []).push(r.data.id);
+      saveMine();
+    });
+  }
+
+  function undoMine(it) {
+    var id = it.id, list = state.mine[id] || [];
+    if (!list.length) return;
+    var cid = list.pop();
+    if (!list.length) delete state.mine[id];
+    saveMine();
+    bump(id, -1);
+    render();
+    if (!sb) { try { localStorage.setItem(LS_DEMO, JSON.stringify(state.claims)); } catch (e) {} return; }
+    sb.from("claims").delete().eq("id", cid).then(function (r) {
       if (r.error) {
-        if (on) delete state.claims[id]; else state.claims[id] = true;
-        render();
-        $("summary").textContent = "Couldn't save that. Check your connection and try again.";
+        (state.mine[id] = state.mine[id] || []).push(cid);
+        saveMine();
+        bump(id, 1);
+        saveFailed();
       }
     });
   }
@@ -161,6 +211,7 @@
     $("f-name").value = item ? item.name || "" : "";
     $("f-link").value = item ? item.link || "" : "";
     $("f-price").value = item ? item.price || "" : "";
+    $("f-qty").value = item ? qtyOf(item) : 1;
     $("f-category").value = item ? item.category || "" : "";
     $("f-note").value = item ? item.note || "" : "";
     $("f-occ").value = item ? item.occ || "either" : "either";
@@ -183,6 +234,7 @@
       name: $("f-name").value.trim(),
       link: safeUrl($("f-link").value),
       price: $("f-price").value.trim(),
+      qty: Math.min(99, Math.max(1, parseInt($("f-qty").value, 10) || 1)),
       category: $("f-category").value.trim(),
       note: $("f-note").value.trim(),
       occ: $("f-occ").value,
@@ -260,12 +312,36 @@
     var f = state.filter, editable = canEdit();
     var rows = (state.items[state.person] || [])
       .filter(function (it) { return f === "all" || it.occ === f || it.occ === "either"; })
-      .map(function (it, i) { return { it: it, i: i, c: !!state.claims[it.id] }; })
+      .map(function (it, i) {
+        var q = qtyOf(it), n = state.claims[it.id] || 0;
+        return { it: it, i: i, q: q, n: n, c: n >= q, mine: (state.mine[it.id] || []).length };
+      })
       .sort(function (a, b) { return (a.c - b.c) || ((b.it.top ? 1 : 0) - (a.it.top ? 1 : 0)) || (a.i - b.i); });
 
     var grid = $("grid"); grid.innerHTML = "";
     rows.forEach(function (row) {
-      var it = row.it, c = row.c, href = safeUrl(it.link);
+      var it = row.it, c = row.c, q = row.q, href = safeUrl(it.link);
+
+      var claimBtns = [];
+      if (!c) {
+        claimBtns.push(el("button", {
+          type: "button", "class": "btn-claim",
+          text: q > 1 ? "I’m getting one" : "I’m getting this",
+          onclick: function () { claimOne(it); }
+        }));
+      }
+      if (row.mine) {
+        claimBtns.push(el("button", {
+          type: "button", "class": c ? "btn-claim is-mine" : "btn-undo",
+          text: row.mine > 1 ? "Undo mine (" + row.mine + ")" : (c ? "Yours · Undo" : "Undo mine"),
+          onclick: function () { undoMine(it); }
+        }));
+      } else if (c) {
+        claimBtns.push(el("button", {
+          type: "button", "class": "btn-claim", disabled: "",
+          text: q > 1 ? "All " + q + " covered" : "Someone’s got it"
+        }));
+      }
       var kids = [
         el("div", { "class": "card-head" }, [
           el("span", { "class": "cat", text: it.category || "" }),
@@ -277,16 +353,13 @@
         ]),
         el("div", { "class": "meta" }, [
           it.price ? el("span", { "class": "price", text: it.price }) : null,
+          q > 1 ? el("span", { "class": "occ qty", text: "Wants " + q }) : null,
           el("span", { "class": "occ", text: OCC[it.occ] || "Either one" })
         ]),
+        q > 1 ? el("p", { "class": "progress", text: row.n + " of " + q + " claimed" }) : null,
         el("div", { "class": "actions" }, [
-          href ? el("a", { "class": "btn-link", href: href, target: "_blank", rel: "noopener noreferrer" }, [document.createTextNode("View item"), svg(ARROW)]) : null,
-          el("button", {
-            type: "button", "class": "btn-claim", "aria-pressed": String(c),
-            text: c ? "Someone’s got it" : "I’m getting this",
-            onclick: function () { setClaim(it.id, !c); }
-          })
-        ])
+          href ? el("a", { "class": "btn-link", href: href, target: "_blank", rel: "noopener noreferrer" }, [document.createTextNode("View item"), svg(ARROW)]) : null
+        ].concat(claimBtns))
       ];
       if (editable) {
         var del = el("button", { type: "button", "class": "danger", "data-armed": "false", text: "Delete" });

@@ -157,10 +157,13 @@
       <label class="field"><span>Price</span>
         <input type="text" id="f-price" placeholder="$25" maxlength="20">
       </label>
-      <label class="field"><span>Category</span>
-        <input type="text" id="f-category" list="category-list" maxlength="40">
+      <label class="field field-qty"><span>How many</span>
+        <input type="number" id="f-qty" min="1" max="99" step="1" value="1" inputmode="numeric">
       </label>
     </div>
+    <label class="field"><span>Category</span>
+      <input type="text" id="f-category" list="category-list" maxlength="40">
+    </label>
     <datalist id="category-list"></datalist>
     <label class="field"><span>Notes (size, color, model…)</span>
       <textarea id="f-note" rows="3" maxlength="300"></textarea>
