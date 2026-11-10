@@ -19,6 +19,7 @@
     items: {},          // person -> [items]
     claims: {},         // item id -> how many people claimed it
     mine: loadMine(),   // item id -> [claim ids made in this browser]
+    pending: {},        // item id -> claims still being saved
     loaded: false,
     session: null,
     editorPerson: null, // which list the signed-in user may edit
@@ -85,7 +86,7 @@
 
   function loadAll() {
     if (!sb) { loadDemo(); return; }
-    Promise.all([
+    return Promise.all([
       sb.from("items").select("*").order("created_at", { ascending: false }),
       sb.from("claims").select("id,item_id")
     ]).then(function (res) {
@@ -136,11 +137,23 @@
       render();
       return;
     }
+    state.pending[id] = (state.pending[id] || 0) + 1;
     render();
     sb.from("claims").insert({ item_id: id }).select("id").single().then(function (r) {
+      state.pending[id]--;
+      if (!state.pending[id]) delete state.pending[id];
+      if (r.error && /FULLY_CLAIMED/.test(r.error.message || "")) {
+        // someone else got there first: pull the latest and say so
+        bump(id, -1);
+        loadAll().then(function () {
+          $("summary").textContent = "Someone just grabbed “" + it.name + "”, so the list has been updated.";
+        });
+        return;
+      }
       if (r.error || !r.data) { bump(id, -1); saveFailed(); return; }
       (state.mine[id] = state.mine[id] || []).push(r.data.id);
       saveMine();
+      render(); // show the Undo button now that we know the claim's id
     });
   }
 
@@ -330,7 +343,9 @@
           onclick: function () { claimOne(it); }
         }));
       }
-      if (row.mine) {
+      if (state.pending[it.id]) {
+        claimBtns.push(el("button", { type: "button", "class": "btn-undo", disabled: "", text: "Saving…" }));
+      } else if (row.mine) {
         claimBtns.push(el("button", {
           type: "button", "class": c ? "btn-claim is-mine" : "btn-undo",
           text: row.mine > 1 ? "Undo mine (" + row.mine + ")" : (c ? "Yours · Undo" : "Undo mine"),
@@ -418,6 +433,16 @@
   Array.prototype.forEach.call(document.querySelectorAll("dialog [data-close]"), function (b) {
     b.addEventListener("click", function () { b.closest("dialog").close(); });
   });
+
+  // ---------- keep claims fresh ----------
+  // re-check every 30s while the tab is open, and right away when someone comes back to it
+  function quietRefresh() {
+    if (!sb || document.hidden || Object.keys(state.pending).length) return;
+    if (document.querySelector("dialog[open]")) return; // don't shuffle cards while a form is open
+    loadAll();
+  }
+  setInterval(quietRefresh, 30000);
+  document.addEventListener("visibilitychange", function () { if (!document.hidden) quietRefresh(); });
 
   // ---------- start ----------
   render();
